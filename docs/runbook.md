@@ -181,6 +181,44 @@ ss -ltn | grep ':5432'
 If the host accepts but the bridge does not, the Airflow connection cannot work
 until PostgreSQL is exposed or the warehouse is containerised.
 
+### 7.2 `docker-compose` v1.29.2 recreate workaround
+
+On newer Docker engines, `docker-compose up --force-recreate` can fail with
+`KeyError: 'ContainerConfig'`. Recreate the ephemeral services by bringing the
+project down **without deleting volumes**, then up:
+
+```bash
+cd ~/projects/airflow
+docker compose down
+docker compose up -d
+```
+
+`down` without `-v` preserves the Airflow metadata volume.
+
+### 7.3 DAG is paused after a metadata reset
+
+After deleting DAG records or recreating the metadata database, the scheduler
+may show `is_paused = None` and queue runs without executing them. Unpause it:
+
+```bash
+docker-compose exec -T airflow-scheduler airflow dags unpause ecommerce_pipeline
+```
+
+### 7.4 Container path overrides
+
+The Airflow Compose file must set the four data-path variables to the
+**container** mount path, not the host path:
+
+```yaml
+DATA_DIR: /opt/airflow/project/data
+RAW_DIR: /opt/airflow/project/data/raw
+PROCESSED_DIR: /opt/airflow/project/data/processed
+WAREHOUSE_DIR: /opt/airflow/project/data/warehouse
+```
+
+Using `${ECOMMERCE_PROJECT_ROOT}` in these values expands to the host path and
+fails inside the container. See `docs/decisions.md` ADR-010.
+
 ## 8. Run the pipeline without Airflow
 
 Useful for local debugging and CI:
