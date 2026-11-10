@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: int_order_item_metrics
+    description: >
+      One row per order. Aggregates order items before any join to payment
+      or review rows so one-to-many joins cannot multiply revenue.
+    columns:
+      - name: order_id
+        data_tests: [not_null, unique]
+  - name: int_payment_metrics
+    description: One row per order with payments pre-aggregated at payment grain.
+    columns:
+      - name: order_id
+        data_tests: [not_null, unique]
+  - name: int_review_metrics
+    description: One row per order with review count and mean score.
+    columns:
+      - name: order_id
+        data_tests: [not_null, unique]
+  - name: int_order_category_metrics
+    description: >
+      One row per (order, category). Multiple items from the same category in
+      one order are grouped so each order contributes once to category review
+      averages.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [order_id, product_category_name]
+    columns:
+      - name: order_id
+        data_tests: [not_null]
+      - name: product_category_name
+        data_tests: [not_null]
+  - name: int_seller_order_outcomes
+    description: >
+      One row per seller and order, not per item. Late outcomes are populated
+      only for delivered orders with a delivery timestamp.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [seller_id, order_id]
+    columns:
+      - name: seller_id
+        data_tests: [not_null]
+      - name: order_id
+        data_tests: [not_null]

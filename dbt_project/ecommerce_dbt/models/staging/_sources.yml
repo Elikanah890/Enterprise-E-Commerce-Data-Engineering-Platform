@@ -1,0 +1,135 @@
+version: 2
+
+sources:
+  - name: silver
+    description: >
+      Existing typed and constrained Silver tables maintained by the Python/SQL
+      pipeline. dbt reads these relations; it never creates or replaces them.
+    schema: silver
+    tables:
+      - name: category_translation
+        description: Portuguese category names mapped to English labels.
+        columns:
+          - name: product_category_name
+            description: Stable natural category key.
+            data_tests: [not_null, unique]
+          - name: product_category_name_english
+            data_tests: [not_null]
+      - name: customers
+        description: One row per order-scoped customer identifier.
+        columns:
+          - name: customer_id
+            data_tests: [not_null, unique]
+          - name: customer_unique_id
+            description: Person-level identifier; repeats across customer_id rows.
+            data_tests: [not_null]
+      - name: geolocation
+        description: Deduplicated observed points, with outliers flagged.
+        data_tests:
+          - unique_combination_of_columns:
+              combination_of_columns: [zip_code_prefix, lat, lng, city, state]
+        columns:
+          - name: zip_code_prefix
+            data_tests: [not_null]
+          - name: lat
+            data_tests: [not_null]
+          - name: lng
+            data_tests: [not_null]
+      - name: order_items
+        description: One row per order item.
+        data_tests:
+          - unique_combination_of_columns:
+              combination_of_columns: [order_id, order_item_id]
+        columns:
+          - name: order_id
+            data_tests:
+              - not_null
+              - relationships:
+                  to: source('silver', 'orders')
+                  field: order_id
+          - name: product_id
+            data_tests:
+              - not_null
+              - relationships:
+                  to: source('silver', 'products')
+                  field: product_id
+          - name: seller_id
+            data_tests:
+              - not_null
+              - relationships:
+                  to: source('silver', 'sellers')
+                  field: seller_id
+      - name: order_payments
+        description: One row per payment sequence within an order.
+        data_tests:
+          - unique_combination_of_columns:
+              combination_of_columns: [order_id, payment_sequential]
+        columns:
+          - name: order_id
+            data_tests:
+              - not_null
+              - relationships:
+                  to: source('silver', 'orders')
+                  field: order_id
+          - name: payment_type
+            data_tests:
+              - not_null
+              - accepted_values:
+                  values: [credit_card, boleto, voucher, debit_card, not_defined]
+      - name: order_reviews
+        description: One row per review and order pair; review_id alone is not unique.
+        data_tests:
+          - unique_combination_of_columns:
+              combination_of_columns: [review_id, order_id]
+        columns:
+          - name: order_id
+            data_tests:
+              - not_null
+              - relationships:
+                  to: source('silver', 'orders')
+                  field: order_id
+          - name: review_score
+            data_tests:
+              - not_null
+              - accepted_values:
+                  values: [1, 2, 3, 4, 5]
+      - name: orders
+        description: One row per order.
+        columns:
+          - name: order_id
+            data_tests: [not_null, unique]
+          - name: customer_id
+            data_tests:
+              - not_null
+              - relationships:
+                  to: source('silver', 'customers')
+                  field: customer_id
+          - name: order_status
+            data_tests:
+              - not_null
+              - accepted_values:
+                  values:
+                    - delivered
+                    - shipped
+                    - canceled
+                    - unavailable
+                    - invoiced
+                    - processing
+                    - created
+                    - approved
+      - name: products
+        description: One row per product, with missing categories normalized in Silver.
+        columns:
+          - name: product_id
+            data_tests: [not_null, unique]
+          - name: product_category_name
+            data_tests:
+              - not_null
+              - relationships:
+                  to: source('silver', 'category_translation')
+                  field: product_category_name
+      - name: sellers
+        description: One row per seller.
+        columns:
+          - name: seller_id
+            data_tests: [not_null, unique]

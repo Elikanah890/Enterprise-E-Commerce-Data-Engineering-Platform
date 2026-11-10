@@ -1,0 +1,17 @@
+# Copy this file to profiles.yml beside dbt_project.yml, or configure
+# DBT_PROFILES_DIR to point at a private profiles.yml. Never commit secrets.
+# DBT_POSTGRES_USER must be a restricted development-only PostgreSQL login.
+
+ecommerce_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_POSTGRES_HOST') }}"
+      port: "{{ env_var('DBT_POSTGRES_PORT', '5432') | int }}"
+      user: "{{ env_var('DBT_POSTGRES_USER') }}"
+      password: "{{ env_var('DBT_POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('DBT_POSTGRES_DB') }}"
+      schema: dbt_dev
+      threads: 4
+      connect_timeout: 5

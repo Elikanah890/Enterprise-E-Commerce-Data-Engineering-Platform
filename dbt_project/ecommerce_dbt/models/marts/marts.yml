@@ -1,0 +1,228 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: >
+      Complete calendar from the earliest to latest order, shipment deadline,
+      delivery, or review event in Silver. date_key is deterministic YYYYMMDD.
+    columns:
+      - name: date_key
+        data_tests: [not_null, unique]
+      - name: date_day
+        data_tests: [not_null, unique]
+  - name: dim_category
+    description: >
+      Category dimension keyed by a deterministic hash of the stable natural
+      category name rather than row_number.
+    columns:
+      - name: category_key
+        data_tests: [not_null, unique]
+      - name: product_category_name
+        data_tests: [not_null, unique]
+  - name: dim_geolocation
+    description: One row per zip prefix; median coordinates exclude outliers when possible.
+    columns:
+      - name: zip_code_prefix
+        data_tests: [not_null, unique]
+  - name: dim_customers
+    description: >
+      One row per customer_id, optionally enriched with one-row-per-zip
+      geolocation. customer_key is a deterministic hash of customer_id.
+    columns:
+      - name: customer_key
+        data_tests: [not_null, unique]
+      - name: customer_id
+        data_tests: [not_null, unique]
+  - name: dim_sellers
+    description: One row per seller_id with optional deterministic zip enrichment.
+    columns:
+      - name: seller_key
+        data_tests: [not_null, unique]
+      - name: seller_id
+        data_tests: [not_null, unique]
+  - name: dim_products
+    description: One row per product, with category, volume, and density attributes.
+    columns:
+      - name: product_key
+        data_tests: [not_null, unique]
+      - name: product_id
+        data_tests: [not_null, unique]
+      - name: category_key
+        data_tests:
+          - relationships:
+              to: ref('dim_category')
+              field: category_key
+  - name: fact_orders
+    description: >
+      One row per order. Item, payment, and review measures are independently
+      aggregated before joining. is_late is null outside the eligible delivered
+      population (delivered status and known delivery timestamp).
+    columns:
+      - name: order_id
+        data_tests: [not_null, unique]
+      - name: order_key
+        data_tests: [not_null, unique]
+      - name: customer_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_key
+      - name: order_date_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+  - name: fact_order_items
+    description: >
+      One row per order item. shipped_after_limit compares carrier handoff time
+      with the seller shipping deadline, not customer delivery time.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [order_id, order_item_id]
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('fact_orders')
+              field: order_id
+      - name: customer_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_key
+      - name: product_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_products')
+              field: product_key
+      - name: seller_key
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_sellers')
+              field: seller_key
+      - name: order_date_key
+        data_tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+  - name: fact_payments
+    description: One row per payment sequence, linked to the order and date dimensions.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [order_id, payment_sequential]
+    columns:
+      - name: payment_key
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('fact_orders')
+              field: order_id
+      - name: order_date_key
+        data_tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+  - name: fact_reviews
+    description: >
+      One row per (review_id, order_id); review_key is a deterministic hash and
+      does not depend on Silver's rebuild-unstable review_sk sequence.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [review_id, order_id]
+    columns:
+      - name: review_key
+        data_tests: [not_null, unique]
+      - name: order_id
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('fact_orders')
+              field: order_id
+      - name: order_date_key
+        data_tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+      - name: review_date_key
+        data_tests:
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+  - name: mart_sales_daily
+    description: Daily sales over non-canceled and non-unavailable order facts.
+    columns:
+      - name: order_date_key
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('dim_date')
+              field: date_key
+  - name: mart_delivery_monthly
+    description: >
+      Monthly delivery metrics. Late rate numerator and denominator both use
+      orders with a known delivery timestamp; orders without a delivery
+      timestamp are excluded from the eligible population.
+    columns:
+      - name: month
+        data_tests: [not_null, unique]
+      - name: eligible_orders
+        data_tests: [not_null]
+  - name: mart_category_performance
+    description: >
+      Category rollup at order-category grain. An order with multiple items in
+      one category contributes one order-level review score to that category.
+    columns:
+      - name: product_category_name
+        data_tests: [not_null, unique]
+      - name: category
+        data_tests: [not_null]
+  - name: mart_seller_performance
+    description: >
+      Seller rollup over distinct seller-order pairs. Late-rate numerator and
+      denominator are order-weighted over all seller-order pairs rather than
+      item rows; review score is also averaged at order grain.
+    columns:
+      - name: seller_id
+        data_tests: [not_null, unique]
+  - name: mart_customer_rfm
+    description: Person-level RFM over non-canceled/non-unavailable orders.
+    columns:
+      - name: customer_unique_id
+        data_tests: [not_null, unique]
+      - name: segment
+        data_tests:
+          - accepted_values:
+              values: [Champions, Loyal, At Risk, Lost, Others]
+  - name: mart_payment_mix_monthly
+    description: Monthly payment method mix at payment-row grain.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [month, payment_type]
+  - name: mart_review_monthly
+    description: Monthly review volume and score metrics at review-row grain.
+    columns:
+      - name: month
+        data_tests: [not_null, unique]
+  - name: mart_payment_reconciliation
+    description: >
+      Payment reconciliation by order status. A mismatch exists when payment
+      total differs from item revenue plus freight by more than 0.01.
+    columns:
+      - name: order_status
+        data_tests: [not_null, unique]
+  - name: mart_data_quality_flags
+    description: Counts of retained data-quality conditions for operations.
+    columns:
+      - name: flag
+        data_tests: [not_null, unique]
+      - name: row_count
+        data_tests: [not_null]

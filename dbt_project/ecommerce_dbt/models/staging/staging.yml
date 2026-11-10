@@ -1,0 +1,100 @@
+version: 2
+
+models:
+  - name: stg_category_translation
+    description: >
+      Thin, read-only projection of Silver category labels. Trims fixed-width
+      padding but does not repeat Silver cleaning.
+    columns:
+      - name: product_category_name
+        data_tests: [not_null, unique]
+      - name: product_category_name_english
+        data_tests: [not_null]
+  - name: stg_customers
+    description: >
+      Silver customers with trailing CHAR padding removed. Grain is one row
+      per order-scoped customer_id; customer_unique_id represents a person.
+    columns:
+      - name: customer_id
+        data_tests: [not_null, unique]
+      - name: customer_unique_id
+        data_tests: [not_null]
+  - name: stg_geolocation
+    description: >
+      Deduplicated Silver geolocation observations. The unstable load-time
+      geo_id is intentionally excluded.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [zip_code_prefix, lat, lng, city, state]
+    columns:
+      - name: zip_code_prefix
+        data_tests: [not_null]
+  - name: stg_order_items
+    description: Silver order-item rows; grain is (order_id, order_item_id).
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [order_id, order_item_id]
+    columns:
+      - name: order_id
+        data_tests: [not_null]
+      - name: product_id
+        data_tests: [not_null]
+      - name: seller_id
+        data_tests: [not_null]
+  - name: stg_order_payments
+    description: Silver payment rows; grain is (order_id, payment_sequential).
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [order_id, payment_sequential]
+    columns:
+      - name: order_id
+        data_tests: [not_null]
+      - name: payment_type
+        data_tests:
+          - accepted_values:
+              values: [credit_card, boleto, voucher, debit_card, not_defined]
+  - name: stg_order_reviews
+    description: >
+      Silver review rows; grain is (review_id, order_id), because review_id
+      alone is reused in the source.
+    data_tests:
+      - unique_combination_of_columns:
+          combination_of_columns: [review_id, order_id]
+    columns:
+      - name: order_id
+        data_tests: [not_null]
+      - name: review_score
+        data_tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+  - name: stg_orders
+    description: Silver order rows; grain is one row per order_id.
+    columns:
+      - name: order_id
+        data_tests: [not_null, unique]
+      - name: customer_id
+        data_tests: [not_null]
+      - name: order_status
+        data_tests:
+          - accepted_values:
+              values:
+                - delivered
+                - shipped
+                - canceled
+                - unavailable
+                - invoiced
+                - processing
+                - created
+                - approved
+  - name: stg_products
+    description: Silver product rows with normalized product identifiers.
+    columns:
+      - name: product_id
+        data_tests: [not_null, unique]
+      - name: product_category_name
+        data_tests: [not_null]
+  - name: stg_sellers
+    description: Silver seller rows with trailing CHAR padding removed.
+    columns:
+      - name: seller_id
+        data_tests: [not_null, unique]
