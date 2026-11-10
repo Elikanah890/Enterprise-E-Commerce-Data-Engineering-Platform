@@ -1,0 +1,6 @@
+segment,customer_count,avg_recency_days,avg_frequency,avg_monetary,total_monetary
+Others,22278,182.7,1.00,55.28,1231612.39
+At Risk,22278,443.6,1.05,242.79,5408810.00
+Loyal,20095,213.5,1.05,228.62,4594085.76
+Lost,15718,445.5,1.00,56.11,881944.77
+Champions,14621,140.2,1.08,247.53,3619074.11

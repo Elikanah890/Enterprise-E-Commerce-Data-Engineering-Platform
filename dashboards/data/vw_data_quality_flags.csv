@@ -1,0 +1,9 @@
+flag,rows
+delivery_anomalies,1382
+payment_mismatches,1076
+orders_without_items,775
+orders_without_reviews,768
+products_missing_category,610
+reviews_before_purchase,74
+zero_value_payments,9
+orders_without_payments,1

@@ -10,6 +10,7 @@ dist/
 .eggs/
 .venv/
 .venv-dbt/
+.venv-dashboards/
 venv/
 env/
 .pytest_cache/
